@@ -114,9 +114,9 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
         if (req.file) {
             updateData.imageUrl = `/uploads/${req.file.filename}`;
             
-            // Delete old image
+            // Delete old image if it exists and is not the default image
             const oldBus = await Bus.findById(req.params.id);
-            if (oldBus && oldBus.imageUrl) {
+            if (oldBus && oldBus.imageUrl && !oldBus.imageUrl.includes('default-bus.jpg')) {
                 const oldImagePath = path.join(uploadsDir, oldBus.imageUrl.split('/').pop());
                 fs.unlink(oldImagePath, (err) => {
                     if (err) console.error('Error deleting old image:', err);
@@ -155,8 +155,8 @@ router.delete('/:id', auth, async (req, res) => {
             return res.status(404).json({ message: 'Bus not found' });
         }
 
-        // Delete associated image
-        if (bus.imageUrl) {
+        // Delete associated image if it exists and is not the default image
+        if (bus.imageUrl && !bus.imageUrl.includes('default-bus.jpg')) {
             const imagePath = path.join(uploadsDir, bus.imageUrl.split('/').pop());
             fs.unlink(imagePath, (err) => {
                 if (err) console.error('Error deleting image:', err);
