@@ -2,16 +2,24 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const Bus = require('../models/Bus');
 const auth = require('../middleware/auth');
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/');
+        cb(null, uploadsDir);
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname));
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 
@@ -36,7 +44,8 @@ router.get('/', async (req, res) => {
         const buses = await Bus.find().sort({ createdAt: -1 });
         res.json(buses);
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching buses:', error);
+        res.status(500).json({ message: 'Error fetching buses' });
     }
 });
 
@@ -49,28 +58,27 @@ router.get('/:id', async (req, res) => {
         }
         res.json(bus);
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching bus:', error);
+        res.status(500).json({ message: 'Error fetching bus' });
     }
 });
 
-// Create new bus (protected route)
+// Create new bus (protected)
 router.post('/', auth, upload.single('busImage'), async (req, res) => {
     try {
-        const { name, route, stops, status, schedule, fare } = req.body;
+        const { name, route, stops, schedule, fare } = req.body;
         
-        if (!req.file) {
-            return res.status(400).json({ message: 'Please upload a bus image' });
+        // Handle image upload
+        let imageUrl = null;
+        if (req.file) {
+            imageUrl = `/uploads/${req.file.filename}`;
         }
-
-        const imageUrl = `/uploads/${req.file.filename}`;
-        const stopsArray = stops.split(',').map(stop => stop.trim());
 
         const bus = new Bus({
             name,
             route,
-            imageUrl,
-            stops: stopsArray,
-            status,
+            stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
+            imageUrl: imageUrl || '/uploads/default-bus.jpg', // Use default image if none uploaded
             schedule,
             fare
         });
@@ -78,18 +86,41 @@ router.post('/', auth, upload.single('busImage'), async (req, res) => {
         await bus.save();
         res.status(201).json(bus);
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error creating bus:', error);
+        // Delete uploaded file if bus creation fails
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error('Error deleting file:', err);
+            });
+        }
+        res.status(500).json({ message: 'Error creating bus', error: error.message });
     }
 });
 
-// Update bus (protected route)
+// Update bus (protected)
 router.put('/:id', auth, upload.single('busImage'), async (req, res) => {
     try {
-        const { name, route, stops, status, schedule, fare } = req.body;
-        const updateData = { name, route, stops, status, schedule, fare };
+        const { name, route, stops, schedule, fare } = req.body;
+        const updateData = {
+            name,
+            route,
+            stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
+            schedule,
+            fare
+        };
 
+        // Handle image upload
         if (req.file) {
             updateData.imageUrl = `/uploads/${req.file.filename}`;
+            
+            // Delete old image
+            const oldBus = await Bus.findById(req.params.id);
+            if (oldBus && oldBus.imageUrl) {
+                const oldImagePath = path.join(uploadsDir, oldBus.imageUrl.split('/').pop());
+                fs.unlink(oldImagePath, (err) => {
+                    if (err) console.error('Error deleting old image:', err);
+                });
+            }
         }
 
         const bus = await Bus.findByIdAndUpdate(
@@ -104,22 +135,38 @@ router.put('/:id', auth, upload.single('busImage'), async (req, res) => {
 
         res.json(bus);
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error updating bus:', error);
+        // Delete uploaded file if update fails
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error('Error deleting file:', err);
+            });
+        }
+        res.status(500).json({ message: 'Error updating bus', error: error.message });
     }
 });
 
-// Delete bus (protected route)
+// Delete bus (protected)
 router.delete('/:id', auth, async (req, res) => {
     try {
-        const bus = await Bus.findByIdAndDelete(req.params.id);
-        
+        const bus = await Bus.findById(req.params.id);
         if (!bus) {
             return res.status(404).json({ message: 'Bus not found' });
         }
 
+        // Delete associated image
+        if (bus.imageUrl) {
+            const imagePath = path.join(uploadsDir, bus.imageUrl.split('/').pop());
+            fs.unlink(imagePath, (err) => {
+                if (err) console.error('Error deleting image:', err);
+            });
+        }
+
+        await Bus.findByIdAndDelete(req.params.id);
         res.json({ message: 'Bus deleted successfully' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error deleting bus:', error);
+        res.status(500).json({ message: 'Error deleting bus', error: error.message });
     }
 });
 
