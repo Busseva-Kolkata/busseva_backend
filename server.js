@@ -18,6 +18,15 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Root route
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Welcome to BusSevaKolkata API',
+        status: 'running',
+        version: '1.0.0'
+    });
+});
+
 // Routes
 app.use('/api/admin', authRoutes);
 app.use('/api/buses', busRoutes);
