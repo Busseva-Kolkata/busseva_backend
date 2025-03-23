@@ -7,10 +7,27 @@ const auth = require('../middleware/auth');
 // Admin login
 router.post('/login', async (req, res) => {
     try {
+        console.log('Login attempt:', req.body);
         const { email, password } = req.body;
-        const admin = await Admin.findOne({ email });
+        
+        if (!email || !password) {
+            console.log('Missing credentials');
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
 
-        if (!admin || !(await admin.comparePassword(password))) {
+        const admin = await Admin.findOne({ email });
+        console.log('Admin found:', admin ? 'Yes' : 'No');
+
+        if (!admin) {
+            console.log('Admin not found');
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        const isMatch = await admin.comparePassword(password);
+        console.log('Password match:', isMatch);
+
+        if (!isMatch) {
+            console.log('Invalid password');
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
@@ -18,6 +35,7 @@ router.post('/login', async (req, res) => {
             expiresIn: '24h'
         });
 
+        console.log('Login successful');
         res.json({
             token,
             user: {
@@ -27,7 +45,8 @@ router.post('/login', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
 
@@ -52,7 +71,8 @@ router.post('/create-admin', auth, async (req, res) => {
 
         res.status(201).json({ message: 'Admin created successfully' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Create admin error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
 
