@@ -64,7 +64,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new bus (protected)
-router.post('/', auth, upload.single('busImage'), async (req, res) => {
+router.post('/', auth, upload.single('image'), async (req, res) => {
     try {
         const { name, route, stops, schedule, fare } = req.body;
         
@@ -98,7 +98,7 @@ router.post('/', auth, upload.single('busImage'), async (req, res) => {
 });
 
 // Update bus (protected)
-router.put('/:id', auth, upload.single('busImage'), async (req, res) => {
+router.put('/:id', auth, upload.single('image'), async (req, res) => {
     try {
         const { name, route, stops, schedule, fare } = req.body;
         const updateData = {
