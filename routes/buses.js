@@ -71,14 +71,14 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
         // Handle image upload
         let imageUrl = null;
         if (req.file) {
-            imageUrl = `/uploads/${req.file.filename}`;
+            imageUrl = `https://busseva-backend.onrender.com/uploads/${req.file.filename}`;
         }
 
         const bus = new Bus({
             name,
             route,
             stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
-            imageUrl: imageUrl || '/uploads/default-bus.jpg', // Use default image if none uploaded
+            imageUrl: imageUrl || 'https://busseva-backend.onrender.com/uploads/default-bus.jpg', // Use default image if none uploaded
             schedule,
             fare,
             totalStops: totalStops || (stops ? stops.split(',').length.toString() : '0')
@@ -112,7 +112,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 
         // Handle image upload
         if (req.file) {
-            updateData.imageUrl = `/uploads/${req.file.filename}`;
+            updateData.imageUrl = `https://busseva-backend.onrender.com/uploads/${req.file.filename}`;
             
             // Delete old image if it exists and is not the default image
             const oldBus = await Bus.findById(req.params.id);
