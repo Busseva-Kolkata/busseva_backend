@@ -66,7 +66,7 @@ router.get('/:id', async (req, res) => {
 // Create new bus (protected)
 router.post('/', auth, upload.single('image'), async (req, res) => {
     try {
-        const { name, route, stops, schedule, fare } = req.body;
+        const { name, route, stops, schedule, fare, totalStops } = req.body;
         
         // Handle image upload
         let imageUrl = null;
@@ -80,7 +80,8 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
             stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
             imageUrl: imageUrl || '/uploads/default-bus.jpg', // Use default image if none uploaded
             schedule,
-            fare
+            fare,
+            totalStops: totalStops || (stops ? stops.split(',').length.toString() : '0')
         });
 
         await bus.save();
