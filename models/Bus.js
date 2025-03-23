@@ -11,14 +11,14 @@ const busSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    imageUrl: {
-        type: String,
-        required: true
-    },
     stops: [{
         type: String,
         trim: true
     }],
+    imageUrl: {
+        type: String,
+        required: true
+    },
     status: {
         type: String,
         enum: ['active', 'inactive'],
@@ -26,10 +26,17 @@ const busSchema = new mongoose.Schema({
     },
     schedule: {
         type: String,
+        required: true,
         trim: true
     },
     fare: {
         type: String,
+        required: true,
+        trim: true
+    },
+    totalStops: {
+        type: String,
+        required: true,
         trim: true
     }
 }, {
