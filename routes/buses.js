@@ -81,7 +81,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
             name,
             route,
             stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
-            imageUrl: imageUrl || 'https://res.cloudinary.com/your-cloud-name/image/upload/v1/bussevakolkata/default-bus.jpg', // Use default image if none uploaded
+            imageUrl: imageUrl || 'https://res.cloudinary.com/dlpskz98w/image/upload/v1/bussevakolkata/default-bus.jpg', // Use default image if none uploaded
             schedule,
             fare,
             totalStops: totalStops || (stops ? stops.split(',').length.toString() : '0')
