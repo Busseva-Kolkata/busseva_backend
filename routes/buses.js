@@ -2,29 +2,13 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const Bus = require('../models/Bus');
 const auth = require('../middleware/auth');
 const NodeCache = require('node-cache');
+const { storage, cloudinary } = require('../config/cloudinary');
 const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
 // Configure multer for file upload
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadsDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
 const upload = multer({
     storage: storage,
     limits: { fileSize: 5000000 }, // 5MB limit
@@ -63,8 +47,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         // Check cache first
-        const cacheKey = `bus_${req.params.id}`;
-        const cachedBus = cache.get(cacheKey);
+        const cachedBus = cache.get(`bus_${req.params.id}`);
         if (cachedBus) {
             return res.json(cachedBus);
         }
@@ -73,8 +56,9 @@ router.get('/:id', async (req, res) => {
         if (!bus) {
             return res.status(404).json({ message: 'Bus not found' });
         }
+
         // Store in cache
-        cache.set(cacheKey, bus);
+        cache.set(`bus_${req.params.id}`, bus);
         res.json(bus);
     } catch (error) {
         console.error('Error fetching bus:', error);
@@ -90,14 +74,14 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
         // Handle image upload
         let imageUrl = null;
         if (req.file) {
-            imageUrl = `https://busseva-backend.onrender.com/uploads/${req.file.filename}`;
+            imageUrl = req.file.path; // Cloudinary returns the URL in the path property
         }
 
         const bus = new Bus({
             name,
             route,
             stops: stops ? stops.split(',').map(stop => stop.trim()) : [],
-            imageUrl: imageUrl || 'https://busseva-backend.onrender.com/uploads/default-bus.jpg', // Use default image if none uploaded
+            imageUrl: imageUrl || 'https://res.cloudinary.com/your-cloud-name/image/upload/v1/bussevakolkata/default-bus.jpg', // Use default image if none uploaded
             schedule,
             fare,
             totalStops: totalStops || (stops ? stops.split(',').length.toString() : '0')
@@ -107,12 +91,6 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
         res.status(201).json(bus);
     } catch (error) {
         console.error('Error creating bus:', error);
-        // Delete uploaded file if bus creation fails
-        if (req.file) {
-            fs.unlink(req.file.path, (err) => {
-                if (err) console.error('Error deleting file:', err);
-            });
-        }
         res.status(500).json({ message: 'Error creating bus', error: error.message });
     }
 });
@@ -131,15 +109,19 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 
         // Handle image upload
         if (req.file) {
-            updateData.imageUrl = `https://busseva-backend.onrender.com/uploads/${req.file.filename}`;
+            updateData.imageUrl = req.file.path; // Cloudinary returns the URL in the path property
             
-            // Delete old image if it exists and is not the default image
+            // Delete old image from Cloudinary if it exists and is not the default image
             const oldBus = await Bus.findById(req.params.id);
             if (oldBus && oldBus.imageUrl && !oldBus.imageUrl.includes('default-bus.jpg')) {
-                const oldImagePath = path.join(uploadsDir, oldBus.imageUrl.split('/').pop());
-                fs.unlink(oldImagePath, (err) => {
-                    if (err) console.error('Error deleting old image:', err);
-                });
+                try {
+                    // Extract public_id from the Cloudinary URL
+                    const publicId = oldBus.imageUrl.split('/').slice(-1)[0].split('.')[0];
+                    await cloudinary.uploader.destroy(`bussevakolkata/${publicId}`);
+                } catch (deleteError) {
+                    console.error('Error deleting old image from Cloudinary:', deleteError);
+                    // Continue with the update even if deletion fails
+                }
             }
         }
 
@@ -156,12 +138,6 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
         res.json(bus);
     } catch (error) {
         console.error('Error updating bus:', error);
-        // Delete uploaded file if update fails
-        if (req.file) {
-            fs.unlink(req.file.path, (err) => {
-                if (err) console.error('Error deleting file:', err);
-            });
-        }
         res.status(500).json({ message: 'Error updating bus', error: error.message });
     }
 });
@@ -174,12 +150,16 @@ router.delete('/:id', auth, async (req, res) => {
             return res.status(404).json({ message: 'Bus not found' });
         }
 
-        // Delete associated image if it exists and is not the default image
+        // Delete associated image from Cloudinary if it exists and is not the default image
         if (bus.imageUrl && !bus.imageUrl.includes('default-bus.jpg')) {
-            const imagePath = path.join(uploadsDir, bus.imageUrl.split('/').pop());
-            fs.unlink(imagePath, (err) => {
-                if (err) console.error('Error deleting image:', err);
-            });
+            try {
+                // Extract public_id from the Cloudinary URL
+                const publicId = bus.imageUrl.split('/').slice(-1)[0].split('.')[0];
+                await cloudinary.uploader.destroy(`bussevakolkata/${publicId}`);
+            } catch (deleteError) {
+                console.error('Error deleting image from Cloudinary:', deleteError);
+                // Continue with bus deletion even if image deletion fails
+            }
         }
 
         await Bus.findByIdAndDelete(req.params.id);
