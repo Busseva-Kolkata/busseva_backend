@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const Bus = require('../models/Bus');
 const auth = require('../middleware/auth');
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -38,10 +40,18 @@ const upload = multer({
     }
 });
 
-// Get all buses
+// Get all buses with caching
 router.get('/', async (req, res) => {
     try {
-        const buses = await Bus.find().sort({ createdAt: -1 });
+        // Check cache first
+        const cachedBuses = cache.get('allBuses');
+        if (cachedBuses) {
+            return res.json(cachedBuses);
+        }
+
+        const buses = await Bus.find();
+        // Store in cache
+        cache.set('allBuses', buses);
         res.json(buses);
     } catch (error) {
         console.error('Error fetching buses:', error);
@@ -49,13 +59,22 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get single bus
+// Get single bus with caching
 router.get('/:id', async (req, res) => {
     try {
+        // Check cache first
+        const cacheKey = `bus_${req.params.id}`;
+        const cachedBus = cache.get(cacheKey);
+        if (cachedBus) {
+            return res.json(cachedBus);
+        }
+
         const bus = await Bus.findById(req.params.id);
         if (!bus) {
             return res.status(404).json({ message: 'Bus not found' });
         }
+        // Store in cache
+        cache.set(cacheKey, bus);
         res.json(bus);
     } catch (error) {
         console.error('Error fetching bus:', error);
